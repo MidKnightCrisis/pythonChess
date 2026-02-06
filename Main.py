@@ -29,11 +29,14 @@ def init():
     i = 0
     for yPos in range(8):
         for xPos in range(8):
-            ct = i <= 31
+            if i <= 31:
+                ct = "White"
+            else:
+                ct = "Black"
             if (xPos + yPos) % 2 != 0:
                 color = "White"
             else:
-                color = "Black"
+                color = "Grey"
             if piecePos[i] != "EMPTY":
                 occupied = [ct, piecePos[i]]
             else:
@@ -57,10 +60,10 @@ while run:
     screen.fill("white")
     # MAIN CODE
     for x in board:
-        pygame.draw.rect(screen,x[2],pygame.Rect(50+x[0]*50,50+x[1]*50,50,50))
-        #match x[3]:
-        #    case "EMPTY":
-
+        rect = pygame.Rect(50+x[0]*50,50+x[1]*50,50,50)
+        pygame.draw.rect(screen,x[2],rect)
+        if x[3] != []:
+            screen.blit(pygame.transform.scale(pygame.image.load(f"Images\\pieces-basic-png\\{x[3][0]}-{x[3][1]}.png"),(50,50)),(50+x[0]*50,50+x[1]*50))
     pygame.draw.rect(screen, "Black", pygame.Rect(100, 100, 400, 400), 2)
     pygame.display.flip()
 
