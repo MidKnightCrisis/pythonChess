@@ -13,14 +13,14 @@ board = []
 hlRect = None
 # check if current piece is white
 piecePos = [
-    ["ROOK",  "KNIGHT","BISHOP","QUEEN", "KING",  "BISHOP","KNIGHT","ROOK"],
-    ["PAWN",  "PAWN",  "PAWN",  "PAWN",  "PAWN",  "PAWN",  "PAWN",  "PAWN"],
-    ["EMPTY", "EMPTY", "EMPTY", "EMPTY", "EMPTY", "EMPTY", "EMPTY", "EMPTY"],
-    ["EMPTY", "EMPTY", "EMPTY", "EMPTY", "EMPTY", "EMPTY", "EMPTY", "EMPTY"],
-    ["EMPTY", "EMPTY", "EMPTY", "EMPTY", "EMPTY", "EMPTY", "EMPTY", "EMPTY"],
-    ["EMPTY", "EMPTY", "EMPTY", "EMPTY", "EMPTY", "EMPTY", "EMPTY", "EMPTY"],
-    ["PAWN",  "PAWN",  "PAWN",  "PAWN",  "PAWN",  "PAWN",  "PAWN",  "PAWN"],
-    ["ROOK",  "KNIGHT","BISHOP","QUEEN", "KING",  "BISHOP","KNIGHT","ROOK"]
+    ["bR", "bN", "bB", "bQ", "bK", "bB", "bN", "bR"],
+    ["bP", "bP", "bP", "bP", "bP", "bP", "bP", "bP"],
+    ["EM", "EM", "EM", "EM", "EM", "EM", "EM", "EM"],
+    ["EM", "EM", "EM", "EM", "EM", "EM", "EM", "EM"],
+    ["EM", "EM", "EM", "EM", "EM", "EM", "EM", "EM"],
+    ["EM", "EM", "EM", "EM", "EM", "EM", "EM", "EM"],
+    ["wP", "wP", "wP", "wP", "wP", "wP", "wP", "wP"],
+    ["wR", "wN", "wB", "wQ", "wK", "wB", "wN", "wR"],
 ]
 class Piece:
     def __init__(self,color,type):
@@ -28,28 +28,21 @@ class Piece:
         self.type = type
 
 def init():
-    i = 0
     for yPos in range(8):
+        row = []
         for xPos in range(8):
-            if i > 32:
-                ct = "White"
-            else:
-                ct = "Black"
-            if (xPos + yPos) % 2 != 0:
-                color = "White"
-            else:
-                color = "Grey"
-            if piecePos[yPos][xPos] != "EMPTY":
-                occupied = [ct, piecePos[yPos][xPos]]
-            else:
-                occupied = []
+            color = "White" if (xPos + yPos) % 2 == 0 else "Grey"
             rect = pygame.Rect(50 + xPos * 50, 50 + yPos * 50, 50, 50)
-            board.append([color, occupied, rect])
-            i += 1
+            row.append([color, rect])
+        board.append(row)
 def selectpiece(pos):
-    for x in board:
-        if x[2].collidepoint(pos) and x[1] != [] and x[1][0] == turn:
-            return x[2]
+    for row in board:
+        row_index = board.index(row)
+        for tile in row:
+            tile_index = row.index(tile)
+            currentPos = piecePos[row_index][tile_index]
+            if tile[1].collidepoint(pos) and currentPos != "EM" and "w" in currentPos:
+                return tile[1]
     return None
 
 
@@ -59,7 +52,7 @@ def selectpiece(pos):
 #             match x[1]:
 #                case "ROOK":
 #                    for y in piecePos:
-#                        if index(x)%8 == index(y)%8
+#                        if board.index(x) == index(y)
 
 
 init()
@@ -73,10 +66,14 @@ while run:
     # wipe last screen
     screen.fill("white")
     # FRONT END CODE
-    for x in board:
-        pygame.draw.rect(screen,x[0],x[2])
-        if x[1]:
-            screen.blit(pygame.transform.scale(pygame.image.load(f"Images\\pieces-basic-png\\{x[1][0]}-{x[1][1]}.png"),(50,50)), x[2])
+    for row in board:
+        row_index = board.index(row)
+        for tile in row:
+            tile_index = row.index(tile)
+            pygame.draw.rect(screen,tile[0],tile[1])
+            curpiece = piecePos[row_index][tile_index]
+            if curpiece != "EM":
+                screen.blit(pygame.transform.scale(pygame.image.load(f"Images\\pieces-basic-png\\{curpiece}.png"),(50,50)), tile[1])
     pygame.draw.rect(screen, "Black", pygame.Rect(50, 50, 400, 400), 2)
     if hlRect is not None:
         pygame.draw.rect(screen, "Red", hlRect, 1)
