@@ -38,7 +38,6 @@ def selectpiece(pos):
             col = yPos.index(xPos)
             currentPos = piecePos[row][col]
             if xPos[1].collidepoint(pos) and currentPos != "EM" and turn in currentPos:
-                print([xPos[1], currentPos, [col, row]])
                 return [xPos[1], currentPos, [col, row]]
     return [None, "EM", []]
 
@@ -73,40 +72,24 @@ def move(pos, start):
             for i in range(start[2][1]+step, coords[1], step):
                 if piecePos[i][coords[0]] != "EM":
                     return [None, "EM", []]
-            if target == "EM" or turn not in target:
-                piecePos[coords[1]][coords[0]] = start[1]
-                piecePos[start[2][1]][start[2][0]] = "EM"
-                return [None, "EM", []]
-            # This case should only be for target tile having current player's piece
-            else:
-                return [None, "EM", []]
+            return checkCapture(coords, start, target)
         else:
             step = 1 if coords[0] > start[2][0] else -1
             for i in range(start[2][0] + step, coords[0], step):
                 if piecePos[coords[1]][i] != "EM":
                     return [None, "EM", []]
-            if target == "EM" or turn not in target:
-                piecePos[coords[1]][coords[0]] = start[1]
-                piecePos[start[2][1]][start[2][0]] = "EM"
-                return [None, "EM", []]
-            # This case should only be for target tile having current player's piece
-            else:
-                return [None, "EM", []]
+            return checkCapture(coords, start, target)
     elif "P" in start[1]:
         step = 1 if "b" in start[1] else -1
         opponent = "w" if step == 1 else "b"
         srow = 1 if step == 1 else 6
         # Check 1-step
-        print(start[2][1])
-        print(step)
-        print(coords[1])
         if start[2][1] + step == coords[1] and abs(coords[0] - start[2][0]) <= 1:
+            # TODO: En Passant
             if (abs(coords[0] - start[2][0]) == 1 and opponent in target) or (abs(coords[0] - start[2][0]) == 0 and target == "EM"):
                 piecePos[coords[1]][coords[0]] = start[1]
                 piecePos[start[2][1]][start[2][0]] = "EM"
-                return [None, "EM", []]
-            else:
-                return [None, "EM", []]
+            return [None, "EM", []]
         # Check 2-step
         elif start[2][1] + 2 * step == coords[1] and start[2][1] == srow:
             for i in range(start[2][1] + step, coords[1] + step, step):
@@ -114,11 +97,57 @@ def move(pos, start):
                     return [None, "EM", []]
             piecePos[coords[1]][coords[0]] = start[1]
             piecePos[start[2][1]][start[2][0]] = "EM"
+        return [None, "EM", []]
+    elif "B" in start[1]:
+        if not abs(coords[0] - start[2][0]) == abs(coords[1] - start[2][1]):
             return [None, "EM", []]
         else:
+            stepX = 1 if coords[0] > start[2][0] else -1
+            stepY = 1 if coords[1] > start[2][1] else -1
+            for i in range(1, abs(coords[0]-start[2][0])):
+                if piecePos[start[2][1] + i * stepY][start[2][0] + i * stepX] != "EM":
+                    return [None, "EM", []]
+            return checkCapture(coords, start, target)
+    elif "Q" in start[1]:
+        if not (coords[0] == start[2][0] or coords[1] == start[2][1] or abs(coords[0] - start[2][0]) == abs(coords[1] - start[2][1])):
             return [None, "EM", []]
+        elif abs(coords[0] - start[2][0]) == abs(coords[1] - start[2][1]):
+            stepX = 1 if coords[0] > start[2][0] else -1
+            stepY = 1 if coords[1] > start[2][1] else -1
+            for i in range(1, abs(coords[0] - start[2][0])):
+                if piecePos[start[2][1] + i * stepY][start[2][0] + i * stepX] != "EM":
+                    return [None, "EM", []]
+            return checkCapture(coords, start, target)
+        elif coords[0] == start[2][0]:
+            step = 1 if coords[1] > start[2][1] else -1
+            for i in range(start[2][1]+step, coords[1], step):
+                if piecePos[i][coords[0]] != "EM":
+                    return [None, "EM", []]
+            return checkCapture(coords, start, target)
+        else:
+            step = 1 if coords[0] > start[2][0] else -1
+            for i in range(start[2][0] + step, coords[0], step):
+                if piecePos[coords[1]][i] != "EM":
+                    return [None, "EM", []]
+            return checkCapture(coords, start, target)
+    elif "K" in start[1]:
+        if not (abs(coords[0] - start[2][0]) <= 1 and abs(coords[1] - start[2][1]) <= 1):
+            return [None, "EM", []]
+        return checkCapture(coords, start, target)
+    else:
+        if not ((abs(coords[0] - start[2][0]) == 2 and abs(coords[1] - start[2][1]) == 1) or(abs(coords[0] - start[2][0]) == 1 and abs(coords[1] - start[2][1]) == 2)):
+            return [None, "EM", []]
+        return checkCapture(coords, start, target)
 
 
+
+def checkCapture(coord, start, target):
+    if target == "EM" or turn not in target:
+        piecePos[coord[1]][coord[0]] = start[1]
+        piecePos[start[2][1]][start[2][0]] = "EM"
+        return [None, "EM", []]
+    else:
+        return [None, "EM", []]
 
 init()
 while run:
