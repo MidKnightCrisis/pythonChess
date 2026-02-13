@@ -8,6 +8,7 @@ run = True
 dt = 0
 # current tile color
 # aMap = ["a","b","c","d","e","f","g","h"]
+img = {}
 turn = "w"
 board = []
 selected = [None, "EM", []]
@@ -24,6 +25,10 @@ piecePos = [
 ]
 
 def init():
+    for row in piecePos:
+        for piece in row:
+            if piece != "EM" and piece not in img:
+                img[piece] = pygame.transform.scale(pygame.image.load(f"Images\\pieces-basic-png\\{piece}.png"),(50,50))
     for yPos in range(8):
         row = []
         for xPos in range(8):
@@ -32,13 +37,11 @@ def init():
             row.append([color, rect])
         board.append(row)
 def selectpiece(pos):
-    for yPos in board:
-        row = board.index(yPos)
-        for xPos in yPos:
-            col = yPos.index(xPos)
-            currentPos = piecePos[row][col]
-            if xPos[1].collidepoint(pos) and currentPos != "EM" and turn in currentPos:
-                return [xPos[1], currentPos, [col, row]]
+    for row_idx, row_data in enumerate(board):
+        for col_idx, tile in enumerate(row_data):
+            currentPos = piecePos[row_idx][col_idx]
+            if tile[1].collidepoint(pos) and currentPos != "EM" and turn in currentPos:
+                return [tile[1], currentPos, [col_idx, row_idx]]
     return [None, "EM", []]
 
 
@@ -46,17 +49,15 @@ def move(pos, start):
     coords = None
     target = None
     # Finds clicked tile coordinates and current occupation
-    for row in board:
-        row_index = board.index(row)
-        for col in row:
-            col_index = row.index(col)
-            if col[1].collidepoint(pos):
-                coords = [col_index, row_index]
-                target = piecePos[row_index][col_index]
+    for row_idx, row_data in enumerate(board):
+        for col_idx, tile in enumerate(row_data):
+            if tile[1].collidepoint(pos):
+                coords = [col_idx, row_idx]
+                target = piecePos[row_idx][col_idx]
                 # If clicked tile contains another piece of current player, select that
                 # TODO: Edge case Castling
                 if turn in target:
-                    return [col[1], target, coords]
+                    return [tile[1], target, coords]
     if coords is None:
         return [None, "EM", []]
     # General Logic in Piece Movement:
@@ -131,6 +132,7 @@ def move(pos, start):
                     return [None, "EM", []]
             return checkCapture(coords, start, target)
     elif "K" in start[1]:
+        # TODO: Castling
         if not (abs(coords[0] - start[2][0]) <= 1 and abs(coords[1] - start[2][1]) <= 1):
             return [None, "EM", []]
         return checkCapture(coords, start, target)
@@ -163,14 +165,12 @@ while run:
     # wipe last screen
     screen.fill("white")
     # FRONT END CODE
-    for row in board:
-        row_index = board.index(row)
-        for tile in row:
-            tile_index = row.index(tile)
+    for row_idx, row_data in enumerate(board):
+        for col_idx, tile in enumerate(row_data):
             pygame.draw.rect(screen,tile[0],tile[1])
-            curpiece = piecePos[row_index][tile_index]
+            curpiece = piecePos[row_idx][col_idx]
             if curpiece != "EM":
-                screen.blit(pygame.transform.scale(pygame.image.load(f"Images\\pieces-basic-png\\{curpiece}.png"),(50,50)), tile[1])
+                screen.blit(img[curpiece], tile[1])
     pygame.draw.rect(screen, "Black", pygame.Rect(50, 50, 400, 400), 2)
     if selected[0] is not None:
         pygame.draw.rect(screen, "Red", selected[0], 1)
