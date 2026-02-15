@@ -1,4 +1,5 @@
 import pygame
+from collections import namedtuple
 
 pygame.init()
 screen = pygame.display.set_mode((800, 800))
@@ -39,117 +40,100 @@ def init():
 def selectpiece(pos):
     for row_idx, row_data in enumerate(board):
         for col_idx, tile in enumerate(row_data):
-            currentPos = piecePos[row_idx][col_idx]
+            currentPos = get_piece(col_idx, row_idx)
             if tile[1].collidepoint(pos) and currentPos != "EM" and turn in currentPos:
                 return [tile[1], currentPos, [col_idx, row_idx]]
     return [None, "EM", []]
 
 
 def move(pos, start):
-    coords = None
+    global turn
     target = None
     # Finds clicked tile coordinates and current occupation
     for row_idx, row_data in enumerate(board):
         for col_idx, tile in enumerate(row_data):
             if tile[1].collidepoint(pos):
-                coords = [col_idx, row_idx]
-                target = piecePos[row_idx][col_idx]
+                target = [tile[1], get_piece(col_idx, row_idx), [col_idx, row_idx]]
                 # If clicked tile contains another piece of current player, select that
                 # TODO: Edge case Castling
-                if turn in target:
-                    return [tile[1], target, coords]
-    if coords is None:
+                if turn in target[1]:
+                    return target
+    if target is None:
         return [None, "EM", []]
     # General Logic in Piece Movement:
     # 1. target tile is within move set of current piece
     # 2. there is no piece obstructing movement
     # 3. target tile is occupiable
     # TODO: Check and Mate
-    if "R" in start[1]:
-        if not (coords[0] == start[2][0] or coords[1] == start[2][1]):
-            return [None, "EM", []]
-        elif coords[0] == start[2][0]:
-            step = 1 if coords[1] > start[2][1] else -1
-            for i in range(start[2][1]+step, coords[1], step):
-                if piecePos[i][coords[0]] != "EM":
-                    return [None, "EM", []]
-            return checkCapture(coords, start, target)
-        else:
-            step = 1 if coords[0] > start[2][0] else -1
-            for i in range(start[2][0] + step, coords[0], step):
-                if piecePos[coords[1]][i] != "EM":
-                    return [None, "EM", []]
-            return checkCapture(coords, start, target)
-    elif "P" in start[1]:
-        step = 1 if "b" in start[1] else -1
-        opponent = "w" if step == 1 else "b"
-        srow = 1 if step == 1 else 6
+    target_x, target_y = target[2]
+    start_x, start_y = start[2]
+    if move_check(start_x, start_y, target_x, target_y, start[1]) and check_capture(target[1]):
+        return capture(start, target)
+    return [None, "EM", []]
+
+def move_check(start_x, start_y, end_x, end_y, piece):
+    dx = abs(end_x - start_x)
+    dy = abs(end_y - start_y)
+    if piece[1] in "RBQ":
+        if (piece[1] in "BQ" and dx == dy) or (piece[1] in "RQ" and (dx == 0 or dy == 0)):
+            if is_path_clear(start_x, start_y, end_x, end_y):
+                return True
+    elif ("K" in piece and max(dx, dy) == 1) or ("N" in piece and dx * dy == 2):
+        return True
+    #Remaining case: Pawn
+    else:
+        step = 1 if "b" in piece else -1
+        start_row = 1 if step == 1 else 6
         # Check 1-step
-        if start[2][1] + step == coords[1] and abs(coords[0] - start[2][0]) <= 1:
+        if start_y + step == end_y and dx <= 1:
             # TODO: En Passant
-            if (abs(coords[0] - start[2][0]) == 1 and opponent in target) or (abs(coords[0] - start[2][0]) == 0 and target == "EM"):
-                piecePos[coords[1]][coords[0]] = start[1]
-                piecePos[start[2][1]][start[2][0]] = "EM"
-            return [None, "EM", []]
+            target = get_piece(end_x, end_y)
+            if (dx == 1 and turn not in target and target != "EM") or (dx == 0 and target == "EM"):
+                return True
         # Check 2-step
-        elif start[2][1] + 2 * step == coords[1] and start[2][1] == srow:
-            for i in range(start[2][1] + step, coords[1] + step, step):
-                if piecePos[i][start[2][0]] != "EM":
-                    return [None, "EM", []]
-            piecePos[coords[1]][coords[0]] = start[1]
-            piecePos[start[2][1]][start[2][0]] = "EM"
-        return [None, "EM", []]
-    elif "B" in start[1]:
-        if not abs(coords[0] - start[2][0]) == abs(coords[1] - start[2][1]):
-            return [None, "EM", []]
-        else:
-            stepX = 1 if coords[0] > start[2][0] else -1
-            stepY = 1 if coords[1] > start[2][1] else -1
-            for i in range(1, abs(coords[0]-start[2][0])):
-                if piecePos[start[2][1] + i * stepY][start[2][0] + i * stepX] != "EM":
-                    return [None, "EM", []]
-            return checkCapture(coords, start, target)
-    elif "Q" in start[1]:
-        if not (coords[0] == start[2][0] or coords[1] == start[2][1] or abs(coords[0] - start[2][0]) == abs(coords[1] - start[2][1])):
-            return [None, "EM", []]
-        elif abs(coords[0] - start[2][0]) == abs(coords[1] - start[2][1]):
-            stepX = 1 if coords[0] > start[2][0] else -1
-            stepY = 1 if coords[1] > start[2][1] else -1
-            for i in range(1, abs(coords[0] - start[2][0])):
-                if piecePos[start[2][1] + i * stepY][start[2][0] + i * stepX] != "EM":
-                    return [None, "EM", []]
-            return checkCapture(coords, start, target)
-        elif coords[0] == start[2][0]:
-            step = 1 if coords[1] > start[2][1] else -1
-            for i in range(start[2][1]+step, coords[1], step):
-                if piecePos[i][coords[0]] != "EM":
-                    return [None, "EM", []]
-            return checkCapture(coords, start, target)
-        else:
-            step = 1 if coords[0] > start[2][0] else -1
-            for i in range(start[2][0] + step, coords[0], step):
-                if piecePos[coords[1]][i] != "EM":
-                    return [None, "EM", []]
-            return checkCapture(coords, start, target)
-    elif "K" in start[1]:
-        # TODO: Castling
-        if not (abs(coords[0] - start[2][0]) <= 1 and abs(coords[1] - start[2][1]) <= 1):
-            return [None, "EM", []]
-        return checkCapture(coords, start, target)
-    else:
-        if not ((abs(coords[0] - start[2][0]) == 2 and abs(coords[1] - start[2][1]) == 1) or(abs(coords[0] - start[2][0]) == 1 and abs(coords[1] - start[2][1]) == 2)):
-            return [None, "EM", []]
-        return checkCapture(coords, start, target)
+        elif start_y + 2 * step == end_y and start_y == start_row:
+            for i in range(start_y + step, end_y + step, step):
+                if get_piece(start_x, i) != "EM":
+                    return False
+            return True
+    return False
 
-
-
-def checkCapture(coord, start, target):
+def check_capture(target):
     if target == "EM" or turn not in target:
-        piecePos[coord[1]][coord[0]] = start[1]
-        piecePos[start[2][1]][start[2][0]] = "EM"
-        return [None, "EM", []]
-    else:
-        return [None, "EM", []]
+        return True
+    return False
+
+def capture(start, target):
+    global turn
+    target_x, target_y = target[2]
+    start_x, start_y = start[2]
+    set_piece(target_x, target_y, start[1])
+    set_piece(start_x, start_y, "EM")
+    turn = "w" if turn == "b" else "b"
+    return [None, "EM", []]
+
+def get_piece(x, y):
+    return piecePos[y][x]
+
+def set_piece(x, y, piece):
+    piecePos[y][x] = piece
+
+def is_path_clear(start_x, start_y, end_x, end_y):
+    step_x = (end_x > start_x) - (end_x < start_x)
+    step_y = (end_y > start_y) - (end_y < start_y)
+    temp_x = start_x + step_x
+    temp_y = start_y + step_y
+    while not (temp_x == end_x and temp_y == end_y):
+        if get_piece(temp_x,temp_y) != "EM":
+            return False
+        temp_x += step_x
+        temp_y += step_y
+    return True
+
+# def get_pseudo_legal_moves():
+#     move_list = namedtuple('Move',['start','end','moved','captured','special'])
+#
+#     return move_list
 
 init()
 while run:
