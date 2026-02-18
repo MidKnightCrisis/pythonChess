@@ -7,13 +7,10 @@ clock = pygame.time.Clock()
 run = True
 # delta time (s) since last frame; useful for frame-independent physics
 dt = 0
-# current tile color
-# aMap = ["a","b","c","d","e","f","g","h"]
 img = {}
 turn = "w"
 board = []
 selected = [None, "EM", ()]
-# check if current piece is white
 piecePos = [
     ["bR", "bN", "bB", "bQ", "bK", "bB", "bN", "bR"],
     ["bP", "bP", "bP", "bP", "bP", "bP", "bP", "bP"],
@@ -50,8 +47,7 @@ def select_piece(pos):
     return [None, "EM", ()]
 
 
-def move(pos, start):
-    global turn
+def move(pos, start, pseudo_moves):
     target = None
     # Finds clicked tile coordinates and current occupation
     for row_idx, row_data in enumerate(board):
@@ -69,51 +65,18 @@ def move(pos, start):
     # 2. there is no piece obstructing movement
     # 3. target tile is occupiable
     # TODO: Check and Mate
-    target_x, target_y = target[2]
-    start_x, start_y = start[2]
-    if move_check(start_x, start_y, target_x, target_y, start[1]) and check_capture(target[1]):
-        return capture(start_x, start_y, target_x, target_y, start[1])
+    if any(m.start == start[2] and m.target == target[2] for m in pseudo_moves):
+        return capture(start[2], target[2], start[1])
     return start
 
 
-def move_check(start_x, start_y, target_x, target_y, piece):
-    dx = abs(target_x - start_x)
-    dy = abs(target_y - start_y)
-    if piece[1] in "RBQ":
-        if (piece[1] in "BQ" and dx == dy) or (piece[1] in "RQ" and (dx == 0 or dy == 0)):
-            if (target_x, target_y) in slide_ray(start_x, start_y, piece):
-                return True
-    elif ("K" in piece and max(dx, dy) == 1) or ("N" in piece and dx * dy == 2):
-        return True
-    # Remaining case: Pawn
-    else:
-        step = 1 if "b" in piece else -1
-        start_row = 1 if step == 1 else 6
-        # Check 1-step
-        if start_y + step == target_y and dx <= 1:
-            # TODO: En Passant
-            target = get_piece(target_x, target_y)
-            if (dx == 1 and turn not in target and target != "EM") or (dx == 0 and target == "EM"):
-                return True
-        # Check 2-step
-        elif start_y + 2 * step == target_y and start_y == start_row:
-            for i in range(start_y + step, target_y + step, step):
-                if get_piece(start_x, i) != "EM":
-                    return False
-            return True
-    return False
-
-
-def check_capture(target):
-    if target == "EM" or turn not in target:
-        return True
-    return False
-
-
-def capture(start_x, start_y, target_x, target_y, piece):
-    global turn
+def capture(start, target, piece):
+    global turn, pl_moves
+    start_x, start_y = start
+    target_x, target_y = target
     set_piece(target_x, target_y, piece)
     set_piece(start_x, start_y, "EM")
+    pl_moves = get_pseudo_legal_moves()
     turn = "w" if turn == "b" else "b"
     return [None, "EM", ()]
 
@@ -126,7 +89,8 @@ def set_piece(x, y, piece):
     piecePos[y][x] = piece
 
 
-def slide_ray(start_x, start_y, piece):
+def slide_ray(start, piece):
+    start_x, start_y = start
     moves = []
     directions = []
     if piece[1] in "RQ":
@@ -135,14 +99,14 @@ def slide_ray(start_x, start_y, piece):
         directions += [(1, 1), (-1, 1), (-1, -1), (1, -1)]
     for dx, dy in directions:
         for i in range(1,8):
-            end_x = start_x + dx * i
-            end_y = start_y + dy * i
-            if 0 <= end_x < 8 and 0 <= end_y < 8:
-                target = get_piece(end_x, end_y)
+            target_x = start_x + dx * i
+            target_y = start_y + dy * i
+            if is_on_board(target_x, target_y):
+                target = get_piece(target_x, target_y)
                 if target == "EM":
-                    moves.append((end_x, end_y))
+                    moves.append([(target_x, target_y), target])
                 elif turn not in target:
-                    moves.append((end_x, end_y))
+                    moves.append([(target_x, target_y), target])
                     break
                 else:
                     break
@@ -151,51 +115,71 @@ def slide_ray(start_x, start_y, piece):
     return moves
 
 
-def stepper_check(start_x, start_y, piece):
+def stepper_check(start, piece):
+    start_x, start_y = start
     moves = []
     knight_jumps = [(2, 1), (1, 2), (-2, 1), (-1, 2), (2, -1), (1, -2), (-2, -1), (-1, -2)]
     king_steps = [(1, 0), (0, 1), (1, 1), (-1, 0), (0, -1), (-1, 1), (1, -1), (-1, -1)]
     directions = knight_jumps if "N" in piece else king_steps
     for dx, dy in directions:
-        end_x = start_x + dx
-        end_y = start_y + dy
-        if 0 <= end_x < 8 and 0 <= end_y < 8:
-            target = get_piece(end_x, end_y)
+        target_x = start_x + dx
+        target_y = start_y + dy
+        if is_on_board(target_x, target_y):
+            target = get_piece(target_x, target_y)
             if target == "EM" or turn not in target:
-                moves.append((end_x, end_y))
+                moves.append([(target_x, target_y), target])
     return moves
 
 
+def get_moves_piece_type(start, piece):
+    if piece[1] in "RBQ":
+        return slide_ray(start, piece)
+    elif piece[1] in "NK":
+        return stepper_check(start, piece)
+    else:
+        return pawn_check(start, piece)
+
+
+def pawn_check(start, piece):
+    start_x, start_y = start
+    moves = []
+    direction = -1 if "w" in piece else 1
+    fwd = (start_x, start_y + direction)
+    start_row = 1 if direction == 1 else 6
+    if is_on_board(*fwd) and get_piece(*fwd) == "EM":
+        moves.append([fwd, "EM"])
+        two_step = (start_x, start_y + 2 * direction)
+        if is_on_board(*two_step) and get_piece(*two_step) == "EM" and start_y == start_row:
+            moves.append([two_step, "EM"])
+    for dx in [-1,1]:
+        diag = (start_x + dx, start_y + direction)
+        if is_on_board(*diag):
+            target = get_piece(*diag)
+            if target != "EM" and turn not in target:
+                moves.append([diag, target])
+    return moves
+
+
+def is_on_board(x, y):
+    return 0 <= x < 8 and 0 <= y < 8
+
+
 def get_pseudo_legal_moves():
-    Move = namedtuple('Move',['start','end','moved','captured','special'])
+    Move = namedtuple('Move',['start','target','moved','captured','special'])
     move_list = []
     for r in range(8):
         for c in range(8):
+            crd = (c, r)
             p = get_piece(c, r)
-            if turn in p:
-                match p[1]:
-                    # TODO: Special flags for En Passant and Castling
-                    case "R"|"B"|"Q":
-                        for pos in slide_ray(c, r, p):
-                            target = get_piece(pos[0], pos[1])
-                            if target == "EM":
-                                move_list.append(Move((c, r), pos, p, "EM", "00"))
-                            elif turn not in target:
-                                move_list.append(Move((c, r), pos, p, target, "00"))
-                    case "N"|"K":
-                        for pos in stepper_check(c, r, p):
-                            target = get_piece(pos[0], pos[1])
-                            if target == "EM":
-                                move_list.append(Move((c, r), pos, p, "EM", "00"))
-                            elif turn not in target:
-                                move_list.append(Move((c, r), pos, p, target, "00"))
-                    case "P":
-                        # TODO: Pawn stuff
-                        continue
+            if turn not in p:
+                continue
+            for target, captured in get_moves_piece_type(crd, p):
+                move_list.append(Move(crd, target, p, captured, "00"))
     return move_list
 
 init()
 while run:
+    pseudo_moves = get_pseudo_legal_moves()
     # poll for events (actions done)
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -204,7 +188,7 @@ while run:
             if selected[0] is None:
                 selected = select_piece(event.pos)
             else:
-                selected = move(event.pos, selected)
+                selected = move(event.pos, selected, pseudo_moves)
     # wipe last screen
     screen.fill("white")
     # FRONT END CODE
