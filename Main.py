@@ -25,6 +25,7 @@ piecePos = [
 Move = namedtuple('Move', ['start', 'target', 'moved', 'captured', 'special'])
 move_log = []
 game_over = None
+castle = {"w": [True, True], "b": [True, True]}
 
 
 def init():
@@ -63,7 +64,6 @@ def move(pos, start, legal_moves):
             if tile[1].collidepoint(pos):
                 target = [tile[1], get_piece(piecePos, col_idx, row_idx), (col_idx, row_idx)]
                 # If clicked tile contains another piece of current player, select that
-                # TODO: Edge case Castling
                 if turn in target[1]:
                     return target
     if target is None:
@@ -72,7 +72,6 @@ def move(pos, start, legal_moves):
     # 1. target tile is within move set of current piece
     # 2. there is no piece obstructing movement
     # 3. target tile is occupiable
-    # TODO: Check and Mate
     for m in legal_moves:
         if m.start == start[2] and m.target == target[2]:
             return capture(m)
@@ -81,16 +80,30 @@ def move(pos, start, legal_moves):
 
 def capture(move):
     global turn
+    color = move.moved[0]
+    pdir = 1 if "w" in move.moved else -1
     move_log.append(move)
     set_piece(piecePos, *move.target, move.moved)
     set_piece(piecePos, *move.start, "EM")
+    # En Passant Flag
     if move.special == "EP":
-        pdir = 1 if "w" in move.moved else -1
         set_piece(piecePos, move.target[0], move.target[1] + pdir, "EM")
+    # Castle Flag
+    opp_row = 0 if color == "w" else 7
+    if move.special == "CS":
+        direction = (0, 3) if move.target[0] - move.start[0] > 0 else (7, 5)
+        set_piece(piecePos, direction[0], move.start[1], "EM")
+        set_piece(piecePos, direction[1], move.start[1], f"{color}R")
+    for idx, corner in enumerate([0,7]):
+        if move.target == (corner, opp_row):
+            castle[("w" if color == "b" else "b")][idx] = False
+    if "K" in move.moved:
+        castle[color] = [False, False]
+    # TODO: Promotion
     if "P" in move.moved:
         if (move.target[1] == 0 and "w" in move.moved) or \
            (move.target[1] == 7 and "b" in move.moved):
-            set_piece(piecePos, *move.target, f"{move.moved[0]}Q")
+            set_piece(piecePos, *move.target, f"{color}Q")
     turn = "w" if turn == "b" else "b"
     return [None, "EM", ()]
 
@@ -194,7 +207,26 @@ def get_pseudo_legal_moves(board_state, color, last_move=None):
             p = get_piece(board_state, *crd)
             if color in p:
                 move_list += get_moves_piece_type(board_state, crd, p, last_move)
+                if p == f"{color}K":
+                    move_list += get_castling_moves(board_state, color, crd, p)
     return move_list
+
+
+def get_castling_moves(board_state, color, crd, piece):
+    castle_moves = []
+    opp = "w" if color == "b" else "b"
+    checked_row = 0 if color == "b" else 7
+    direction = [(2, range(1, 4), range(3, 5)), (6, range(5, 7), range(4, 7))]
+    for idx, (target_x, empty_range, threat_range) in enumerate(direction):
+        if castle[color][idx] and all(get_piece(board_state, i, checked_row) == "EM" for i in empty_range):
+            threatened = False
+            for i in threat_range:
+                if attacked_check(board_state, opp, (i, checked_row)):
+                    threatened = True
+                    break
+            if not threatened:
+                castle_moves.append(Move(crd, (target_x, checked_row), piece, "EM", "CS"))
+    return castle_moves
 
 
 def get_king_pos(board_state, color):
@@ -204,48 +236,61 @@ def get_king_pos(board_state, color):
                 return c, r
 
 
-def is_in_check(board_state, color):
-    king_position = get_king_pos(board_state, color)
-    opp = "w" if color == "b" else "b"
-    for s in get_slider_moves(board_state, king_position, f"{color}Q"):
+def attacked_check(board_state, attack_color, crd):
+    def_color = "w" if attack_color == "b" else "b"
+    for s in get_slider_moves(board_state, crd, f"{def_color}Q"):
         attacker = get_piece(board_state, *s.target)
-        dx = abs(king_position[0] - s.target[0])
-        dy = abs(king_position[1] - s.target[1])
-        if (dx == 0 or dy == 0) and attacker[1] in "RQ":
+        dx = abs(crd[0] - s.target[0])
+        dy = abs(crd[1] - s.target[1])
+        if (dx == 0 or dy == 0) and attacker[1] in "RQ" and attack_color in attacker:
             return True
-        elif dx == dy and attacker[1] in "BQ":
+        elif dx == dy and attacker[1] in "BQ" and attack_color in attacker:
             return True
-    for n in get_stepper_moves(board_state, king_position, f"{color}N"):
-        attacker = get_piece(board_state, *n.target)
-        if "N" in attacker:
+    for n in get_stepper_moves(board_state, crd, f"{def_color}N"):
+        if get_piece(board_state, *n.target) == f"{attack_color}N":
             return True
-    for k in get_stepper_moves(board_state, king_position, f"{color}K"):
-        attacker = get_piece(board_state, *k.target)
-        if "K" in attacker:
+    for k in get_stepper_moves(board_state, crd, f"{def_color}K"):
+        if get_piece(board_state, *k.target) == f"{attack_color}K":
             return True
-    step = 1 if color == "b" else -1
+    step = 1 if attack_color == "w" else -1
     for dx in [-1, 1]:
-        target = (king_position[0] + dx, king_position[1] + step)
+        target = (crd[0] + dx, crd[1] + step)
         if is_on_board(*target):
-            if get_piece(board_state, *target) == f"{opp}P":
+            if get_piece(board_state, *target) == f"{attack_color}P":
                 return True
     return False
+
+
+def is_in_check(board_state, color):
+    king_position = get_king_pos(board_state, color)
+    if not king_position:
+        return False
+    attack_color = "w" if color == "b" else "b"
+    return attacked_check(board_state, attack_color, king_position)
 
 
 def get_legal_moves(board_state, color, last_move=None):
     legal_moves = []
     opp = "w" if color == "b" else "b"
+    pdir = 1 if color == "w" else -1
+    direction = (0, 0)
     for move in get_pseudo_legal_moves(board_state, color, last_move):
-        pdir = 1 if color == "w" else -1
         set_piece(board_state, *move.start, "EM")
         save_target = get_piece(board_state, *move.target)
         set_piece(board_state, *move.target, move.moved)
+        if move.special == "CS":
+            direction = (0, 3) if move.target[0] - move.start[0] > 0 else (7, 5)
+            set_piece(board_state, direction[0], move.start[1], "EM")
+            set_piece(board_state, direction[1], move.start[1], f"{color}R")
         if move.special == "EP":
             set_piece(board_state, move.target[0], move.target[1] + pdir, "EM")
         if not is_in_check(board_state, color):
             legal_moves.append(move)
         if move.special == "EP":
             set_piece(board_state, move.target[0], move.target[1] + pdir, f"{opp}P")
+        if move.special == "CS":
+            set_piece(board_state, direction[1], move.start[1], "EM")
+            set_piece(board_state, direction[0], move.start[1], f"{color}R")
         set_piece(board_state, *move.target, save_target)
         set_piece(board_state, *move.start, move.moved)
     return legal_moves
@@ -264,11 +309,11 @@ def undo_move():
     global turn
     move = move_log[-1]
     if move.special == "EP":
-        opp = move.captured[0]
-        pdir = 1 if "w" in move.moved else -1
-        set_piece(board, move.target[0], move.target[1] + pdir, f"{opp}P")
-    set_piece(board, *move.target, move.captured)
-    set_piece(board, *move.start, move.moved)
+        opp = "w" if "b" in move.moved else "b"
+        pdir = 1 if opp == "b" else -1
+        set_piece(piecePos, move.target[0], move.target[1] + pdir, f"{opp}P")
+    set_piece(piecePos, *move.target, move.captured)
+    set_piece(piecePos, *move.start, move.moved)
     move_log.pop()
     turn = "w" if turn == "b" else "b"
 
