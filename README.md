@@ -17,7 +17,7 @@ Dieses Projekt dient als Test meiner Kenntnisse in der objektorientierten Progra
 
 ## 🛠️ Technische Details
 
-* **Sprache:** Python 3.x
+* **Sprache:** Python 3.12
 * **Bibliothek:** `pygame` für das Rendering und Event-Handling.
 * **Architektur:** * Effiziente Zugverwaltung mittels `namedtuples`.
     * Modularer Aufbau für die Bewegungslogik (Slider vs. Stepper Pieces).
