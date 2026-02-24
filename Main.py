@@ -91,7 +91,7 @@ def capture(move):
     # Castle Flag
     opp_row = 0 if color == "w" else 7
     if move.special == "CS":
-        direction = (0, 3) if move.target[0] - move.start[0] > 0 else (7, 5)
+        direction = (0, 3) if move.target[0] - move.start[0] < 0 else (7, 5)
         set_piece(piecePos, direction[0], move.start[1], "EM")
         set_piece(piecePos, direction[1], move.start[1], f"{color}R")
     for idx, corner in enumerate([0,7]):
@@ -279,7 +279,7 @@ def get_legal_moves(board_state, color, last_move=None):
         save_target = get_piece(board_state, *move.target)
         set_piece(board_state, *move.target, move.moved)
         if move.special == "CS":
-            direction = (0, 3) if move.target[0] - move.start[0] > 0 else (7, 5)
+            direction = (0, 3) if move.target[0] - move.start[0] < 0 else (7, 5)
             set_piece(board_state, direction[0], move.start[1], "EM")
             set_piece(board_state, direction[1], move.start[1], f"{color}R")
         if move.special == "EP":
