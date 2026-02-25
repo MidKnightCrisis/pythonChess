@@ -28,6 +28,7 @@ game_over = None
 castle = {"w": [True, True], "b": [True, True]}
 
 
+# load the images of the pieces and prepare to draw the board
 def init():
     for row in piecePos:
         for piece in row:
@@ -47,6 +48,7 @@ def init():
     return legal_moves
 
 
+# returns the tile at mouse click, if possible
 def select_piece(pos):
     for row_idx, row_data in enumerate(board):
         for col_idx, tile in enumerate(row_data):
@@ -56,6 +58,7 @@ def select_piece(pos):
     return [None, "EM", ()]
 
 
+# Wrapper to determine target at mouse click and check if selected piece can move there
 def move(pos, start, legal_moves):
     target = None
     # Finds clicked tile coordinates and current occupation
@@ -78,6 +81,7 @@ def move(pos, start, legal_moves):
     return start
 
 
+# main logic to proceed with piece movement on the actual board
 def capture(move):
     global turn
     color = move.moved[0]
@@ -116,6 +120,7 @@ def set_piece(board_state, x, y, piece):
     board_state[y][x] = piece
 
 
+# move check for rooks, bishops, queens; sends rays to directions to fill the move list
 def get_slider_moves(board_state, start, piece):
     start_x, start_y = start
     moves = []
@@ -142,6 +147,7 @@ def get_slider_moves(board_state, start, piece):
     return moves
 
 
+# move check for kings and knights; iterating through potential positions
 def get_stepper_moves(board_state, start, piece):
     start_x, start_y = start
     moves = []
@@ -158,6 +164,7 @@ def get_stepper_moves(board_state, start, piece):
     return moves
 
 
+# Wrapper to assign piece to respective move function
 def get_moves_piece_type(board_state, start, piece, last_move=None):
     if piece[1] in "RBQ":
         return get_slider_moves(board_state, start, piece)
@@ -167,6 +174,7 @@ def get_moves_piece_type(board_state, start, piece, last_move=None):
         return get_pawn_moves(board_state, start, piece, last_move)
 
 
+# Move check for pawns;
 def get_pawn_moves(board_state, start, piece, last_move=None):
     start_x, start_y = start
     moves = []
@@ -187,7 +195,7 @@ def get_pawn_moves(board_state, start, piece, last_move=None):
             target = get_piece(board_state, *diag)
             if target != "EM" and opp in target:
                 moves.append(Move(start, diag, piece, get_piece(board_state, *diag), "None"))
-    # En Passant Check
+    # En Passant Check: enable capture if enemy pawn jumps past your own
     if last_move and last_move.special == "PJ":
         lm_x, lm_y = last_move.target
         if abs(lm_x - start_x) == 1 and start_y == lm_y:
@@ -199,6 +207,7 @@ def is_on_board(x, y):
     return 0 <= x < 8 and 0 <= y < 8
 
 
+# first check on every move possible, disregarding king checks
 def get_pseudo_legal_moves(board_state, color, last_move=None):
     move_list = []
     for r in range(8):
@@ -212,6 +221,7 @@ def get_pseudo_legal_moves(board_state, color, last_move=None):
     return move_list
 
 
+# Castling check; are pieces unobstructed, is King not threatened during the move
 def get_castling_moves(board_state, color, crd, piece):
     castle_moves = []
     opp = "w" if color == "b" else "b"
@@ -236,6 +246,8 @@ def get_king_pos(board_state, color):
                 return c, r
 
 
+# checks threats on specific tile; simulates enemy piece to access respective
+# move functions for a reverse check
 def attacked_check(board_state, attack_color, crd):
     def_color = "w" if attack_color == "b" else "b"
     for s in get_slider_moves(board_state, crd, f"{def_color}Q"):
@@ -269,6 +281,7 @@ def is_in_check(board_state, color):
     return attacked_check(board_state, attack_color, king_position)
 
 
+# simulates every pseudo-legal move for king check
 def get_legal_moves(board_state, color, last_move=None):
     legal_moves = []
     opp = "w" if color == "b" else "b"
@@ -305,6 +318,8 @@ def check_final_states(board_state, color, legal_moves):
     return None
 
 
+# reads the latest move and reverses its effects
+# TODO: find actual usage for this; probably as a UI element
 def undo_move():
     global turn
     move = move_log[-1]
@@ -318,6 +333,7 @@ def undo_move():
     turn = "w" if turn == "b" else "b"
 
 
+# Main loop
 legal_moves = init()
 while run:
     # poll for events (actions done)
@@ -330,6 +346,7 @@ while run:
             else:
                 ct = turn
                 selected = move(event.pos, selected, legal_moves)
+                # only updates legal moves and game end after an actual move was made
                 if turn != ct:
                     last_m = move_log[-1] if move_log else None
                     legal_moves = get_legal_moves(piecePos, turn, last_m)
@@ -342,7 +359,7 @@ while run:
                             game_over = f"Draw! Stalemate!"
     # wipe last screen
     screen.fill("white")
-    # FRONT END CODE
+    # draws the current board state
     for row_idx, row_data in enumerate(board):
         for col_idx, tile in enumerate(row_data):
             pygame.draw.rect(screen, *tile)
@@ -353,7 +370,8 @@ while run:
     if selected[0] is not None:
         pygame.draw.rect(screen, "Red", selected[0], 1)
     pygame.display.flip()
-
+    # gives time to show End Screen before closing
+    # TODO: End screen
     if game_over:
         print(game_over)
         time.sleep(3)
