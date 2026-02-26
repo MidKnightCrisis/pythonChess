@@ -1,5 +1,4 @@
 import pygame
-import time
 from collections import namedtuple
 
 pygame.init()
@@ -24,8 +23,18 @@ piecePos = [
 ]
 Move = namedtuple('Move', ['start', 'target', 'moved', 'captured', 'special'])
 move_log = []
+# Tracks the 50-Turn-Stalemate rule
+stale_clock = [0]
 game_over = None
 castle = {"w": [True, True], "b": [True, True]}
+is_promo = False
+# Promotion UI Stuff
+overlay = pygame.Surface((400, 400))
+overlay.set_alpha(160)
+overlay.fill((20,20,20))
+pro_menu_pos = (0,0)
+pending_move = None
+pro_rects = []
 
 
 # load the images of the pieces and prepare to draw the board
@@ -60,6 +69,7 @@ def select_piece(pos):
 
 # Wrapper to determine target at mouse click and check if selected piece can move there
 def move(pos, start, legal_moves):
+    global pending_move, is_promo, pro_menu_pos
     target = None
     # Finds clicked tile coordinates and current occupation
     for row_idx, row_data in enumerate(board):
@@ -77,16 +87,26 @@ def move(pos, start, legal_moves):
     # 3. target tile is occupiable
     for m in legal_moves:
         if m.start == start[2] and m.target == target[2]:
-            return capture(m)
+            if m.special == "PR":
+                pending_move = m
+                is_promo = True
+                pro_menu_pos = pygame.mouse.get_pos()
+                return [None, "EM", ()]
+            else:
+                return capture(m)
     return start
 
 
 # main logic to proceed with piece movement on the actual board
 def capture(move):
-    global turn
+    global turn, stale_clock
     color = move.moved[0]
     pdir = 1 if "w" in move.moved else -1
     move_log.append(move)
+    if move.captured == "EM" and "P" not in move.moved:
+        stale_clock.append(stale_clock[-1] + 1)
+    else:
+        stale_clock.append(0)
     set_piece(piecePos, *move.target, move.moved)
     set_piece(piecePos, *move.start, "EM")
     # En Passant Flag
@@ -183,7 +203,10 @@ def get_pawn_moves(board_state, start, piece, last_move=None):
     start_row = 1 if direction == 1 else 6
     opp = "b" if "w" in piece else "w"
     if is_on_board(start_x, fwd) and get_piece(board_state, start_x, fwd) == "EM":
-        moves.append(Move(start, (start_x, fwd), piece, get_piece(board_state, start_x, fwd), "None"))
+        if fwd in [0, 7]:
+            moves.append(Move(start, (start_x, fwd), piece, get_piece(board_state, start_x, fwd), "PR"))
+        else:
+            moves.append(Move(start, (start_x, fwd), piece, get_piece(board_state, start_x, fwd), "None"))
         two_step = start_y + 2 * direction
         if (is_on_board(start_x, two_step)
                 and get_piece(board_state, start_x, two_step) == "EM"
@@ -194,7 +217,10 @@ def get_pawn_moves(board_state, start, piece, last_move=None):
         if is_on_board(*diag):
             target = get_piece(board_state, *diag)
             if target != "EM" and opp in target:
-                moves.append(Move(start, diag, piece, get_piece(board_state, *diag), "None"))
+                if diag[1] in [0,7]:
+                    moves.append(Move(start, diag, piece, get_piece(board_state, *diag), "PR"))
+                else:
+                    moves.append(Move(start, diag, piece, get_piece(board_state, *diag), "None"))
     # En Passant Check: enable capture if enemy pawn jumps past your own
     if last_move and last_move.special == "PJ":
         lm_x, lm_y = last_move.target
@@ -315,14 +341,23 @@ def check_final_states(board_state, color, legal_moves):
             return "Checkmate"
         else:
             return "Stalemate"
+    # 50-Move-Rule includes 50 white and 50 black moves, hence 100
+    elif stale_clock[-1] == 100:
+        return "Stalemate"
     return None
 
 
 # reads the latest move and reverses its effects
 # TODO: find actual usage for this; probably as a UI element
 def undo_move():
-    global turn
+    global turn, stale_clock
     move = move_log[-1]
+    stale_clock.pop()
+    if move.special == "CS":
+        color = move.moved[0]
+        direction = (0, 3) if move.target[0] - move.start[0] < 0 else (7, 5)
+        set_piece(piecePos, direction[0], move.start[1], f"{color}R")
+        set_piece(piecePos, direction[1], move.start[1], "EM")
     if move.special == "EP":
         opp = "w" if "b" in move.moved else "b"
         pdir = 1 if opp == "b" else -1
@@ -333,30 +368,47 @@ def undo_move():
     turn = "w" if turn == "b" else "b"
 
 
+# draws the Promotion Selection UI
+def draw_promo_select():
+    mouse_x, mouse_y = pro_menu_pos
+    pro_rects.clear()
+    screen.blit(overlay, (50,50))
+    color = pending_move.moved[0]
+    pro_options = [f"{color}Q", f"{color}R", f"{color}N", f"{color}B"]
+    for i, option in enumerate(pro_options):
+        rect = pygame.Rect(mouse_x, mouse_y + i * 50, 50, 50)
+        pro_rects.append(rect)
+        pygame.draw.rect(screen, "White", rect)
+        pygame.draw.rect(screen, "Black", rect, 2)
+        screen.blit(img[option], rect)
+
+
+def promo_click(mouse_pos):
+    color = pending_move.moved[0]
+    pro_options = [f"{color}Q", f"{color}R", f"{color}N", f"{color}B"]
+    for i, rect in enumerate(pro_rects):
+        if rect.collidepoint(mouse_pos):
+            return pro_options[i]
+    return None
+
+
+# updates legal moves and checks for end states
+def resolve_turn():
+    global legal_moves, game_over
+    last_m = move_log[-1] if move_log else None
+    legal_moves = get_legal_moves(piecePos, turn, last_m)
+    is_final = check_final_states(piecePos, turn, legal_moves)
+    if is_final is not None:
+        winner = "Black" if turn == "w" else "White"
+        if is_final == "Checkmate":
+            game_over = f"Checkmate! {winner} Player wins!"
+        else:
+            game_over = f"Draw! Stalemate!"
+
+
 # Main loop
 legal_moves = init()
 while run:
-    # poll for events (actions done)
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            run = False
-        if event.type == pygame.MOUSEBUTTONDOWN:
-            if selected[0] is None:
-                selected = select_piece(event.pos)
-            else:
-                ct = turn
-                selected = move(event.pos, selected, legal_moves)
-                # only updates legal moves and game end after an actual move was made
-                if turn != ct:
-                    last_m = move_log[-1] if move_log else None
-                    legal_moves = get_legal_moves(piecePos, turn, last_m)
-                    is_final = check_final_states(piecePos, turn, legal_moves)
-                    if is_final is not None:
-                        winner = "Black" if turn == "w" else "White"
-                        if is_final == "Checkmate":
-                            game_over = f"Checkmate! {winner} Player wins!"
-                        else:
-                            game_over = f"Draw! Stalemate!"
     # wipe last screen
     screen.fill("white")
     # draws the current board state
@@ -369,13 +421,41 @@ while run:
     pygame.draw.rect(screen, "Black", pygame.Rect(50, 50, 400, 400), 2)
     if selected[0] is not None:
         pygame.draw.rect(screen, "Red", selected[0], 1)
-    pygame.display.flip()
-    # gives time to show End Screen before closing
+    if is_promo:
+        draw_promo_select()
     # TODO: End screen
     if game_over:
         print(game_over)
-        time.sleep(3)
-        run = False
+    # poll for events (actions done)
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            run = False
+        if not game_over:
+            if is_promo:
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    pro_selected = promo_click(pygame.mouse.get_pos())
+                    if pro_selected:
+                        new_move = Move(
+                            pending_move.start,
+                            pending_move.target,
+                            pro_selected,
+                            pending_move.captured,
+                            "PR"
+                        )
+                        capture(new_move)
+                        resolve_turn()
+                        is_promo = False
+                        pro_rects = []
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                if selected[0] is None:
+                    selected = select_piece(event.pos)
+                else:
+                    ct = turn
+                    selected = move(event.pos, selected, legal_moves)
+                    # only updates legal moves and game end after an actual move was made
+                    if turn != ct:
+                        resolve_turn()
+    pygame.display.flip()
 
     dt = clock.tick(60) / 1000
 
