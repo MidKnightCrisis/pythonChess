@@ -5,8 +5,10 @@ pygame.init()
 screen = pygame.display.set_mode((800, 800))
 clock = pygame.time.Clock()
 run = True
+# TODO: Wrap globals into something to keep it unique to each user (class?)
 # delta time (s) since last frame; useful for frame-independent physics
 dt = 0
+font = pygame.font.SysFont("Times New Roman", 15, bold=True)
 img = {}
 turn = "w"
 board = []
@@ -37,7 +39,7 @@ pending_move = None
 pro_rects = []
 
 
-# load the images of the pieces and prepare to draw the board
+# load the images and prepare to draw the board
 def init():
     for row in piecePos:
         for piece in row:
@@ -46,6 +48,12 @@ def init():
                     pygame.image.load(f"Images\\pieces-basic-png\\{piece}.png"),
                                                     (50, 50)
                 )
+    img["Undo"] = pygame.transform.scale(
+        pygame.image.load("Images\\undo.png"), (50, 50)
+    )
+    img["Restart"] = pygame.transform.scale(
+        pygame.image.load("Images\\restart.png"), (50, 50)
+    )
     for yPos in range(8):
         row = []
         for xPos in range(8):
@@ -123,11 +131,6 @@ def capture(move):
             castle[("w" if color == "b" else "b")][idx] = False
     if "K" in move.moved:
         castle[color] = [False, False]
-    # TODO: Promotion
-    if "P" in move.moved:
-        if (move.target[1] == 0 and "w" in move.moved) or \
-           (move.target[1] == 7 and "b" in move.moved):
-            set_piece(piecePos, *move.target, f"{color}Q")
     turn = "w" if turn == "b" else "b"
     return [None, "EM", ()]
 
@@ -350,7 +353,9 @@ def check_final_states(board_state, color, legal_moves):
 # reads the latest move and reverses its effects
 # TODO: find actual usage for this; probably as a UI element
 def undo_move():
-    global turn, stale_clock
+    if len(move_log) == 0:
+        return
+    global turn, stale_clock, game_over
     move = move_log[-1]
     stale_clock.pop()
     if move.special == "CS":
@@ -362,10 +367,18 @@ def undo_move():
         opp = "w" if "b" in move.moved else "b"
         pdir = 1 if opp == "b" else -1
         set_piece(piecePos, move.target[0], move.target[1] + pdir, f"{opp}P")
-    set_piece(piecePos, *move.target, move.captured)
-    set_piece(piecePos, *move.start, move.moved)
+        set_piece(piecePos, *move.target, "EM")
+    else:
+        set_piece(piecePos, *move.target, move.captured)
+    if move.special == "PR":
+        set_piece(piecePos, *move.start, f"{move.moved[0]}P")
+    else:
+        set_piece(piecePos, *move.start, move.moved)
     move_log.pop()
     turn = "w" if turn == "b" else "b"
+    game_over = None
+    resolve_turn()
+    return [None, "EM", ()]
 
 
 # draws the Promotion Selection UI
@@ -401,9 +414,31 @@ def resolve_turn():
     if is_final is not None:
         winner = "Black" if turn == "w" else "White"
         if is_final == "Checkmate":
-            game_over = f"Checkmate! {winner} Player wins!"
+            game_over = font.render(f"Checkmate! {winner} Player wins!", True, (0, 0, 0))
         else:
-            game_over = f"Draw! Stalemate!"
+            game_over = font.render("Draw! Stalemate!", True, (0, 0, 0))
+
+
+def restart():
+    global piecePos, turn, game_over, legal_moves
+    piecePos = [
+        ["bR", "bN", "bB", "bQ", "bK", "bB", "bN", "bR"],
+        ["bP", "bP", "bP", "bP", "bP", "bP", "bP", "bP"],
+        ["EM", "EM", "EM", "EM", "EM", "EM", "EM", "EM"],
+        ["EM", "EM", "EM", "EM", "EM", "EM", "EM", "EM"],
+        ["EM", "EM", "EM", "EM", "EM", "EM", "EM", "EM"],
+        ["EM", "EM", "EM", "EM", "EM", "EM", "EM", "EM"],
+        ["wP", "wP", "wP", "wP", "wP", "wP", "wP", "wP"],
+        ["wR", "wN", "wB", "wQ", "wK", "wB", "wN", "wR"],
+    ]
+    board.clear()
+    move_log.clear()
+    stale_clock.clear()
+    stale_clock.append(0)
+    turn = "w"
+    game_over = None
+    legal_moves = init()
+    return [None, "EM", ()]
 
 
 # Main loop
@@ -425,11 +460,21 @@ while run:
         draw_promo_select()
     # TODO: End screen
     if game_over:
-        print(game_over)
+        screen.blit(overlay, (50,50))
+        pygame.draw.rect(screen, "White", pygame.Rect(100, 100, 300, 150))
+        pygame.draw.rect(screen, "Black", pygame.Rect(100, 100, 300, 150), 1)
+        screen.blit(game_over, (150, 125))
+    screen.blit(img["Undo"], pygame.Rect(450, 400, 50, 50))
+    screen.blit(img["Restart"], pygame.Rect(450, 350, 50, 50))
     # poll for events (actions done)
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             run = False
+        if event.type == pygame.MOUSEBUTTONDOWN and pygame.Rect(450, 400, 50, 50).collidepoint(event.pos):
+            selected = undo_move()
+        if event.type == pygame.MOUSEBUTTONDOWN and pygame.Rect(450, 350, 50, 50).collidepoint(event.pos):
+            selected = restart()
+            break
         if not game_over:
             if is_promo:
                 if event.type == pygame.MOUSEBUTTONDOWN:
