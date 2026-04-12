@@ -444,19 +444,19 @@ class GameState:
             self.undo_move()
         return legal_moves
 
-    def evaluate_board(self):
-        score = 0
-        for row_idx, row_data in enumerate(self.board_state):
-            for col_idx, piece in enumerate(row_data):
-                if piece != "EM":
-                    value = piece_values[piece[1]]
-                    value += heatmaps[piece[1]][row_idx][col_idx] \
-                        if "b" not in piece else heatmaps[piece[1]][7 - row_idx][col_idx]
-                    if piece[0] == "w":
-                        score += value
-                    else:
-                        score -= value
-        return score
+    # def evaluate_board(self):
+    #     score = 0
+    #     for row_idx, row_data in enumerate(self.board_state):
+    #         for col_idx, piece in enumerate(row_data):
+    #             if piece != "EM":
+    #                 value = piece_values[piece[1]]
+    #                 value += heatmaps[piece[1]][row_idx][col_idx] \
+    #                     if "b" not in piece else heatmaps[piece[1]][7 - row_idx][col_idx]
+    #                 if piece[0] == "w":
+    #                     score += value
+    #                 else:
+    #                     score -= value
+    #     return score
 
     def restart(self):
         self.is_promo = False
