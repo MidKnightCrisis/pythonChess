@@ -105,8 +105,8 @@ class GameState:
     def get_piece(self, x, y):
         return self.board_state[y][x]
 
-    # move check for rooks, bishops, queens; sends rays to directions to fill the move list
     def get_slider_moves(self, start, piece):
+        """move check for rooks, bishops, queens; sends rays to directions to fill the move list"""
         start_x, start_y = start
         moves = []
         directions = []
@@ -146,8 +146,8 @@ class GameState:
                     break
         return moves
 
-    # move check for kings and knights; iterating through potential positions
     def get_stepper_moves(self, start, piece):
+        """move check for kings and knights; iterating through potential positions"""
         start_x, start_y = start
         moves = []
         knight_jumps = [(2, 1), (1, 2), (-2, 1), (-1, 2), (2, -1), (1, -2), (-2, -1), (-1, -2)]
@@ -170,7 +170,6 @@ class GameState:
                     ))
         return moves
 
-    # Move check for pawns;
     def get_pawn_moves(self, start, piece, last_move=None):
         start_x, start_y = start
         moves = []
@@ -252,8 +251,8 @@ class GameState:
                 ))
         return moves
 
-    # Wrapper to assign piece to respective move function
     def get_moves_piece_type(self, start, piece, last_move=None):
+        """Wrapper to assign piece to respective move function"""
         if piece[1] in "RBQ":
             return self.get_slider_moves(start, piece)
         elif piece[1] in "NK":
@@ -261,9 +260,11 @@ class GameState:
         else:
             return self.get_pawn_moves(start, piece, last_move)
 
-    # checks threats on specific tile; simulates enemy piece to access respective
-    # move functions for a reverse check
     def attacked_check(self, attack_color, crd):
+        """
+        checks threats on specific tile; simulates enemy piece to access respective move functions for a reverse check
+        :param attack_color: the color threatening the tile
+        """
         def_color = "w" if attack_color == "b" else "b"
         for s in self.get_slider_moves(crd, f"{def_color}Q"):
             attacker = self.get_piece(*s.target)
@@ -287,8 +288,8 @@ class GameState:
                     return True
         return False
 
-    # Castling check; are pieces unobstructed, is King not threatened during the move
     def get_castling_moves(self, crd, piece, color=None):
+        """Castling check; are pieces unobstructed, is King not threatened during the move"""
         if color is None:
             color = self.turn
         castle_moves = []
@@ -314,8 +315,8 @@ class GameState:
                     ))
         return castle_moves
 
-    # first check on every move possible, disregarding king checks
     def get_pseudo_legal_moves(self, color=None, last_move=None):
+        """first check on every move possible, disregarding king checks"""
         if color is None:
             color = self.turn
         move_list = []
@@ -359,8 +360,8 @@ class GameState:
             return "Stalemate"
         return None
 
-    # updates legal moves and checks for end states
     def resolve_turn(self):
+        """updates legal moves and checks for end states"""
         last_m = self.move_log[-1] if self.move_log else None
         self.legal_moves = self.get_legal_moves(self.turn, last_m)
         is_final = self.check_final_states(self.legal_moves, self.turn)
@@ -371,8 +372,8 @@ class GameState:
             else:
                 self.game_over = font.render("Draw! Stalemate!", True, (0, 0, 0))
 
-    # simulates piece movement
     def make_move(self, move):
+        """simulates piece movement"""
         self.set_piece(*move.target, move.moved)
         self.set_piece(*move.start, "EM")
         color = move.moved[0]
@@ -399,9 +400,8 @@ class GameState:
         self.turn = "w" if self.turn == "b" else "b"
         return [None, "EM", ()]
 
-    # reads the latest move and reverses its effects
     def undo_move(self):
-        # No undo to do if no move has been done
+        """reads the latest move and reverses its effects"""
         if len(self.move_log) == 0:
             return
         move = self.move_log.pop()
@@ -432,8 +432,8 @@ class GameState:
         self.is_promo = False
         return [None, "EM", ()]
 
-    # simulates every pseudo-legal move for king check
     def get_legal_moves(self, color=None, last_move=None):
+        """simulates every pseudo-legal move for king check"""
         if color is None:
             color = self.turn
         legal_moves = []
@@ -478,8 +478,8 @@ class GameState:
         return [None, "EM", ()]
 
 
-# load the images and prepare to draw the board
 def init(gs):
+    """load the images and prepare to draw the board"""
     for row in gs.board_state:
         for piece in row:
             if piece != "EM" and piece not in img:
@@ -502,8 +502,8 @@ def init(gs):
         board.append(row)
 
 
-# returns the tile at mouse click, if possible
 def select_piece(pos, gs):
+    """returns the tile at mouse click, if possible"""
     for row_idx, row_data in enumerate(board):
         for col_idx, tile in enumerate(row_data):
             piece = gs.get_piece(col_idx, row_idx)
@@ -512,8 +512,8 @@ def select_piece(pos, gs):
     return [None, "EM", ()]
 
 
-# Wrapper to determine target at mouse click and check if selected piece can move there
 def move(pos, start, gs):
+    """Wrapper to determine target at mouse click and check if selected piece can move there"""
     global pro_menu_pos
     target = None
     # Finds clicked tile coordinates and current occupation
@@ -546,8 +546,8 @@ def is_on_board(x, y):
     return 0 <= x < 8 and 0 <= y < 8
 
 
-# draws the Promotion Selection UI
 def draw_promo_select():
+    """draws the Promotion Selection UI"""
     mouse_x, mouse_y = pro_menu_pos
     pro_rects.clear()
     screen.blit(overlay, (50, 50))
@@ -583,7 +583,7 @@ def promo_click(mouse_pos):
 #     return winning_move
 
 
-# Main loop
+# MAIN LOOP
 gs = GameState()
 gs.resolve_turn()
 init(gs)
