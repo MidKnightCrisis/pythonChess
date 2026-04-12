@@ -19,10 +19,64 @@ overlay.fill((20, 20, 20))
 pro_menu_pos = (0, 0)
 pro_rects = []
 # Evaluation stuff
-piece_values = {"P": 100, "Q": 1000, "K": 10000, "B": 300, "N": 300, "R": 500}
+# piece_values = {"P": 100, "Q": 1000, "K": 10000, "B": 300, "N": 300, "R": 500}
+# heatmaps = {"N": [
+#     [-40, -30,  -20,  -20,  -20,  -20, -30, -40],
+#     [-30, -10,   10,   10,   10,   10, -10, -30],
+#     [-20,  10,   20,   25,   25,   20,  10, -20],
+#     [-20,  15,   25,   30,   30,   25,  15, -20],
+#     [-30,   5,   15,   20,   20,   15,   5, -30],
+#     [-30,   0,   10,   15,   15,   10,   0, -30],
+#     [-40, -20,    0,    0,    0,    0, -20, -40],
+#     [-50, -40,  -30,  -30,  -30,  -30, -40, -50]
+# ], "P": [
+#     [0,    0,  0,  0,  0,  0,  0,   0],
+#     [30,  50, 50, 50, 50, 50, 50,  30],
+#     [20,  40, 40, 40, 40, 40, 40,  20],
+#     [10,  30, 30, 35, 35, 30, 30,  10],
+#     [0,   20, 20, 25, 25, 20, 20,   0],
+#     [-5,  15, 15, 15, 15, 15, 15,  -5],
+#     [-25, -5, -5, -5, -5, -5, -5, -25],
+#     [0,    0,  0,  0,  0,  0,  0,   0]
+# ], "R": [
+#     [0, 0, 0, 0, 0, 0, 0, 0],
+#     [30, 50, 50, 50, 50, 50, 50, 30],
+#     [20, 40, 40, 40, 40, 40, 40, 20],
+#     [10, 30, 30, 35, 35, 30, 30, 10],
+#     [0, 20, 20, 25, 25, 20, 20, 0],
+#     [-5, 15, 15, 15, 15, 15, 15, -5],
+#     [-25, -5, -5, -5, -5, -5, -5, -25],
+#     [0, 0, 0, 0, 0, 0, 0, 0]
+# ], "Q": [
+#     [0, 0, 0, 0, 0, 0, 0, 0],
+#     [30, 50, 50, 50, 50, 50, 50, 30],
+#     [20, 40, 40, 40, 40, 40, 40, 20],
+#     [10, 30, 30, 35, 35, 30, 30, 10],
+#     [0, 20, 20, 25, 25, 20, 20, 0],
+#     [-5, 15, 15, 15, 15, 15, 15, -5],
+#     [-25, -5, -5, -5, -5, -5, -5, -25],
+#     [0, 0, 0, 0, 0, 0, 0, 0]
+# ], "B": [
+#     [0, 0, 0, 0, 0, 0, 0, 0],
+#     [30, 50, 50, 50, 50, 50, 50, 30],
+#     [20, 40, 40, 40, 40, 40, 40, 20],
+#     [10, 30, 30, 35, 35, 30, 30, 10],
+#     [0, 20, 20, 25, 25, 20, 20, 0],
+#     [-5, 15, 15, 15, 15, 15, 15, -5],
+#     [-25, -5, -5, -5, -5, -5, -5, -25],
+#     [0, 0, 0, 0, 0, 0, 0, 0]
+# ], "K": [
+#     [0, 0, 0, 0, 0, 0, 0, 0],
+#     [30, 50, 50, 50, 50, 50, 50, 30],
+#     [20, 40, 40, 40, 40, 40, 40, 20],
+#     [10, 30, 30, 35, 35, 30, 30, 10],
+#     [0, 20, 20, 25, 25, 20, 20, 0],
+#     [-5, 15, 15, 15, 15, 15, 15, -5],
+#     [-25, -5, -5, -5, -5, -5, -5, -25],
+#     [0, 0, 0, 0, 0, 0, 0, 0]
+# ]}
 
 
-# TODO: Wrap globals into something to keep it unique to each user (class?)
 class GameState:
     def __init__(self):
         self.board_state = [
@@ -392,10 +446,12 @@ class GameState:
 
     def evaluate_board(self):
         score = 0
-        for row in self.board_state:
-            for piece in row:
+        for row_idx, row_data in enumerate(self.board_state):
+            for col_idx, piece in enumerate(row_data):
                 if piece != "EM":
                     value = piece_values[piece[1]]
+                    value += heatmaps[piece[1]][row_idx][col_idx] \
+                        if "b" not in piece else heatmaps[piece[1]][7 - row_idx][col_idx]
                     if piece[0] == "w":
                         score += value
                     else:
@@ -513,9 +569,18 @@ def promo_click(mouse_pos):
             return pro_options[i]
     return None
 
-
-# def greed(board_state, legal_moves):
-#     for move in legal_moves:
+# TODO: Continue the work on evaluation AI
+# def greed(gs):
+#     score = -99999
+#     winning_move = gs.legal_moves[0]
+#     for move in gs.legal_moves:
+#         current_turn = 1 if gs.turn == "w" else -1
+#         gs.make_move(move)
+#         if gs.evaluate_board() * current_turn > score:
+#             score = gs.evaluate_board()
+#             winning_move = move
+#         gs.undo_move()
+#     return winning_move
 
 
 # Main loop
