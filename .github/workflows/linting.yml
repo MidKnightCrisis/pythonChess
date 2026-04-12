@@ -1,0 +1,38 @@
+name: Python Linting Check
+
+on:
+  push:
+    branches: ["development"]
+  pull_request:
+    branches: ["development"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Code Checkout
+      uses: actions/checkout@v4
+
+    - name: Install Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.12"
+
+    - name: Install Lints
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8 pylint
+
+    - name: Flake8 Check
+      run: |
+        # This line cancels upon finding grave errors
+        # count := number of errors; select: E9,F63,F7,F82 (critical logic errors)
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        # This line checks style (PEP8) and shows warnings
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+    - name: Pylint Check
+      run: |
+        # exit-zero := Pipeline is passed even with errors, testing Pylint error checking for now
+        pylint --exit-zero Main.py
